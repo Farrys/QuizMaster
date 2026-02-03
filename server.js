@@ -3,8 +3,10 @@
 // Пример реализации backend API
 // ============================================
 
+require('dotenv').config();
+
 const express = require('express');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -22,12 +24,26 @@ app.use(cors());
 app.use(express.static('public'));
 
 // Подключение к базе данных PostgreSQL
-const pool = new Pool({
-    user: process.env.DB_USER || 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    database: process.env.DB_NAME || 'quizmaster',
-    password: process.env.DB_PASSWORD || 'password',
-    port: process.env.DB_PORT || 5432,
+const isProduction = process.env.NODE_ENV === 'production';
+const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
+
+const pool = new Pool(
+    hasDatabaseUrl
+        ? {
+              connectionString: process.env.DATABASE_URL,
+              ssl: isProduction ? { rejectUnauthorized: false } : false
+          }
+        : {
+              user: process.env.DB_USER || 'postgres',
+              host: process.env.DB_HOST || 'localhost',
+              database: process.env.DB_NAME || 'quizmaster',
+              password: process.env.DB_PASSWORD || 'password',
+              port: process.env.DB_PORT || 5432
+          }
+);
+
+pool.on('error', (error) => {
+    console.error('Ошибка пула PostgreSQL:', error);
 });
 
 // Middleware для проверки аутентификации
@@ -655,10 +671,14 @@ app.get('/api/quizzes/:id/export', authMiddleware, async (req, res) => {
 // ЗАПУСК СЕРВЕРА
 // ============================================
 
-app.listen(PORT, () => {
-    console.log(`Сервер запущен на порту ${PORT}`);
-    console.log(`http://localhost:${PORT}`);
-});
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Сервер запущен на порту ${PORT}`);
+        console.log(`http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
 
 // Обработка ошибок
 process.on('unhandledRejection', (error) => {
